@@ -1,6 +1,5 @@
 
 
-### ✅ `README.md`
 
 
 # 🎧 Whisper Audio Transcription API (FastAPI)
