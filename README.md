@@ -1,205 +1,116 @@
 
 
----
+### ✅ `README.md`
 
-# 🧠 Smart Meeting Assistant (Offline Meetings Workflow)
 
----
+# 🎧 Whisper Audio Transcription API (FastAPI)
 
-## 🟩 0. Prerequisites / Assumptions
-
-- Input: **Audio recording file** (e.g., `.mp3`, `.wav`)
-- Meeting is recorded via phone/mic and uploaded post-meeting
-- You have access to:
-  - Groq LLM endpoint
-  - A working email sender (SMTP or API)
-  - An endpoint for your Notes App (can be mocked initially)
+This is a simple web API built using **FastAPI** and **OpenAI Whisper** that transcribes audio files to text. It also serves an HTML frontend from the `/static` folder where you can interact with the transcription endpoint.
 
 ---
 
-## 🟢 1. Audio File Upload / Ingestion
+## 🚀 Features
 
-### 🔹 Task:
-User uploads the audio file via a web app, desktop client, or CLI tool.
-
-### 🔹 Output:
-- Audio file saved to a local folder or cloud bucket.
-- Metadata stored (e.g., meeting title, date, duration)
+- Upload and transcribe `.mp3`, `.wav`, or other audio files.
+- Get instant transcriptions using Whisper's `"base"` model.
+- CORS enabled for frontend integration.
+- Simple HTML frontend served from `/static/index.html`.
 
 ---
 
-## 🟡 2. Speech-to-Text Conversion (Transcription)
+## 🛠 Requirements
 
-### 🔹 Tool:
-Use **Whisper (OpenAI)** or **Deepgram** locally or via API.
+- Python 3.8+
+- `whisper`
+- `fastapi`
+- `uvicorn`
 
-### 🔹 Output:
-Generate **structured transcript** (with timestamps & speaker labels if possible):
+### 📦 Install Dependencies
 
+```bash
+pip install -r requirements.txt
+```
+
+**Example `requirements.txt`:**
+```
+fastapi
+uvicorn
+openai-whisper
+```
+
+---
+
+## 🔄 Run the API
+
+```bash
+uvicorn main:app --reload
+```
+
+- The app will run on: `http://localhost:8000`
+
+---
+
+## 🌐 Access Frontend
+
+Put your `index.html` (or any frontend) inside a folder named `static`.
+
+Example access:
+
+```
+http://localhost:8000/static/index.html
+```
+
+This opens your HTML page, which can make `POST` requests to `/transcribe`.
+
+---
+
+## 🎯 API Endpoint
+
+### `POST /transcribe`
+
+Upload an audio file and get its transcription.
+
+**Request:**
+- `multipart/form-data`
+- Key: `file`
+- Value: (your audio file)
+
+**Response:**
 ```json
-[
-  { "timestamp": "00:00:12", "speaker": "Alice", "text": "Let's take note of the Q2 sales." },
-  { "timestamp": "00:00:33", "speaker": "Bob", "text": "We should send a follow-up email to the client." }
-]
-```
-
-**Store the transcript** in a JSON or Markdown file for backup/reference.
-
----
-
-## 🟠 3. LLM-Based Inference (Groq)
-
-### 🔹 Input:
-The full **transcript** text from step 2.
-
-### 🔹 Prompt Template (example):
-```text
-You are a smart meeting assistant. Given this transcript, extract and classify actionable items by type. Supported types: note, email, calendar_event, todo. For each, include content and relevant details.
-
-Transcript:
-[Insert full transcript here]
-```
-
-### 🔹 Output (LLM Response):
-```json
-[
-  {
-    "type": "note",
-    "content": "Q2 sales must be tracked and reviewed weekly."
-  },
-  {
-    "type": "email",
-    "recipient": "client@example.com",
-    "subject": "Follow-up on Q2 meeting",
-    "body": "Dear Client, as discussed in our recent meeting..."
-  }
-]
-```
-
-**Save this output as `tasks.json` for downstream use.**
-
----
-
-## 🔵 4. Task Routing (Intent Dispatcher)
-
-### 🔹 Logic:
-Read `tasks.json` → Identify type of task → Call respective handler
-
-| Task Type       | Handler                    |
-|------------------|-----------------------------|
-| `note`          | Send to Notes API           |
-| `email`         | Send via Email Sender       |
-| `calendar_event`| (optional) Calendar API     |
-| `todo`          | Add to Notion, Trello, etc. |
-
-### 🔹 Dispatcher Pseudocode:
-```python
-for task in tasks:
-    if task["type"] == "note":
-        send_to_notes(task)
-    elif task["type"] == "email":
-        send_email(task)
-    elif task["type"] == "todo":
-        create_todo_item(task)
+{
+  "transcription": "Your audio text here...",
+  "error": null
+}
 ```
 
 ---
 
-## 🟣 5. Action Execution
+## 📂 Project Structure
 
-### 🔸 A. Notes App
-
-- API: `POST /notes`
-- Payload:
-```json
-{ "content": "Q2 sales must be tracked and reviewed weekly." }
 ```
-
-> If the Notes App isn't done yet, log to file/db as a placeholder.
-
----
-
-### 🔸 B. Email Automation
-
-- SMTP or SendGrid API
-- Send the email with content from LLM
-
-#### Code Example (Python + SMTP):
-```python
-def send_email(task):
-    msg = MIMEText(task["body"])
-    msg["Subject"] = task["subject"]
-    msg["From"] = "assistant@company.com"
-    msg["To"] = task["recipient"]
-
-    s = smtplib.SMTP("smtp.gmail.com", 587)
-    s.starttls()
-    s.login("email", "password")
-    s.sendmail(msg["From"], [msg["To"]], msg.as_string())
-    s.quit()
+.
+├── main.py
+├── static/
+│   └── index.html
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-### 🔸 C. TODO/Calendar Event (Optional)
+## 🧪 Sample Curl Command
 
-- Hook to Notion API, Trello, or Google Calendar
-- Use `task["due_date"]`, `task["title"]`, etc., if present
-
----
-
-## 🟤 6. Post-Processing: Logging & Dashboard
-
-### 🔹 Save:
-- Transcript (`transcript.json`)
-- Extracted Tasks (`tasks.json`)
-- Action logs (success/failure)
-
-### 🔹 Optional UI Dashboard:
-Show status like:
-```
-✅ Note created | 🕒 Email sent | 🛑 Todo failed (missing info)
+```bash
+curl -X POST "http://localhost:8000/transcribe" \
+  -F "file=@your_audio_file.wav"
 ```
 
 ---
 
-## 🔘 7. Error Handling
+## ✅ Notes
 
-- Retry failed actions (e.g., email server down)
-- Log Groq API errors or invalid responses
-- Alert if missing critical info (like email recipient)
-
----
-
-## 🔁 8. Loop or Batch Mode (Optional)
-
-If processing multiple meetings:
-- Loop through a folder of audio files
-- Repeat steps 2–6 for each
+- Make sure the audio file you upload has a valid `content-type`, e.g., `audio/wav`, `audio/mpeg`, etc.
+- The temp audio file is deleted after processing.
+- You can change the Whisper model (`tiny`, `base`, `small`, `medium`, `large`) by modifying `whisper.load_model("base")`.
 
 ---
-
-## ✅ Summary Diagram (Text Version)
-
-```
-[ Audio File ]
-      ↓
-[ Transcription (Whisper) ]
-      ↓
-[ Transcript JSON ]
-      ↓
-[ Groq LLM → Extract Tasks ]
-      ↓
-[ Tasks JSON ]
-      ↓
-+------------------+
-|   Task Router    |
-+------------------+
-  ↓       ↓       ↓
-[Notes] [Email] [Todo/Calendar]
-      ↓
-[Logs + Dashboard]
-```
-
----
-
