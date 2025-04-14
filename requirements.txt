@@ -1,0 +1,4 @@
+groq
+instructor
+pydantic
+python-dotenv
