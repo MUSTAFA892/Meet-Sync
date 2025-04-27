@@ -10,23 +10,28 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 import time
 import requests
+
 load_dotenv()
+
 app = Flask(__name__, template_folder='templates')
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secure-secret-key')  
-app.config['SESSION_TYPE'] = 'filesystem'  
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secure-secret-key')
+app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Ensure cookies work with CORS
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'  # Secure cookies in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to cookies
 BASE_URL = os.getenv('BASE_URL')
-
 
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:8080", "http://localhost"],
+        "origins": ["http://localhost:8080", "http://localhost", os.getenv("NOTES_APP", "")],
         "allow_headers": "*",
         "methods": ["GET", "POST", "OPTIONS"],
-        "supports_credentials": True  
+        "supports_credentials": True
     }
 })
+
 app.config['STATIC_FOLDER'] = 'static'
 app.config['UPLOAD_FOLDER'] = 'temp'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -56,10 +61,10 @@ else:
     groq_client_with_instructor = instructor.from_groq(groq_client, mode=instructor.Mode.JSON)
 
 BACKEND_URLS = {
-    'email': 'https://meet-sync-backend-2.onrender.com/email',
-    'web_search': 'https://meet-sync-backend-2.onrender.com/extract',
-    'note': 'https://meet-sync-backend.vercel.app/api/notes/addnote',
-    'to_do': 'https://meet-sync-backend.vercel.app/api/todo/addtodo',  
+    'email': f"{os.getenv('BACKEND_1_SERVICE')}/email",
+    'web_search': f"{os.getenv('BACKEND_1_SERVICE')}/extract",
+    'note': f"{os.getenv('BACKEND_2_SERVICE')}/api/notes/addnote",
+    'to_do': f"{os.getenv('BACKEND_2_SERVICE')}/api/todo/addtodo",
     'calendar_event': 'https://calendar-backend.com/accept-event'  # Dummy link
 }
 
@@ -90,7 +95,7 @@ def convert_action_items(action_items):
         elif item_type == "web_search":
             web_searches.append({
                 "title": item.get("content", "")
-            })  
+            })
         elif item_type == "note":
             notes.append({
                 "title": item.get("title", ""),
@@ -161,7 +166,6 @@ def transcribe_audio():
         
         start_time = time.time()
         
-        # Using Groq Whisper model for transcription
         with open(temp_file_path, "rb") as audio_file:
             transcription = groq_client.audio.transcriptions.create(
                 file=(temp_file_path, audio_file.read()),
@@ -170,7 +174,7 @@ def transcribe_audio():
             )
         
         transcription_time = time.time() - start_time
-        print(f"Groq Transcription took {transcription_time:.2f} seconds for file {filename}")
+        print(f"[INFO] Groq Transcription took {transcription_time:.2f} seconds for file {filename}")
         
         os.remove(temp_file_path)
         
@@ -178,6 +182,7 @@ def transcribe_audio():
             transcription=transcription.text
         ).model_dump())
     except Exception as e:
+        print(f"[ERROR] Transcription error: {str(e)}")
         return jsonify(TranscriptionResponse(
             transcription="",
             error=str(e)
@@ -201,36 +206,36 @@ def extract_action_items():
                 {
                     "role": "system",
                     "content": '''
-                                You are a smart meeting assistant. Given the transcript below, extract and classify actionable items by type.
-                                Supported action item types:
-                                - note
-                                - email
-                                - calendar_event
-                                - to_do
-                                - web_search
-                                Use the following JSON format for each action item:
-                                {
-                                "type": "<type>",
-                                "content": "<main description of the action item>",
-                                # Required for type 'email'
-                                "recipient": "<recipient email>",
-                                "subject": "<email subject>",
-                                "body": "<full email body>",
-                                # Required for type 'note'
-                                "title": "<short title>",
-                                "tag": "<tag or category for the note>",
-                                # Recommended for type 'to_do'
-                                "title": "<short to-do title>"
-                                }
-                                Notes:
-                                - For action items of type **note**, include `title`, `tag`, and `content` (used as the note description).
-                                - For type **email**, always include `recipient`, `subject`, and `body`.
-                                - For type **to_do**, include a short `title` and a longer `content` (used as the task description).
-                                - For type **calendar_event**, only include `type` and `content`.
-                                - For type **to_do**, include a short `title` and a longer `content` (used as the task description). The `title` is required.
-                                -   For type **web_search** only include `content`.
-                                - Respond with a JSON array of action items only.
-                                '''
+                        You are a smart meeting assistant. Given the transcript below, extract and classify actionable items by type.
+                        Supported action item types:
+                        - note
+                        - email
+                        - calendar_event
+                        - to_do
+                        - web_search
+                        Use the following JSON format for each action item:
+                        {
+                        "type": "<type>",
+                        "content": "<main description of the action item>",
+                        # Required for type 'email'
+                        "recipient": "<recipient email>",
+                        "subject": "<email subject>",
+                        "body": "<full email body>",
+                        # Required for type 'note'
+                        "title": "<short title>",
+                        "tag": "<tag or category for the note>",
+                        # Recommended for type 'to_do'
+                        "title": "<short to-do title>"
+                        }
+                        Notes:
+                        - For action items of type **note**, include `title`, `tag`, and `content` (used as the note description).
+                        - For type **email**, always include `recipient`, `subject`, and `body`.
+                        - For type **to_do**, include a short `title` and a longer `content` (used as the task description).
+                        - For type **calendar_event**, only include `type` and `content`.
+                        - For type **to_do**, include a short `title` and a longer `content` (used as the task description). The `title` is required.
+                        - For type **web_search** only include `content`.
+                        - Respond with a JSON array of action items only.
+                        '''
                 },
                 {
                     "role": "user",
@@ -244,13 +249,14 @@ def extract_action_items():
             with open("action_items.json", "w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2)
         except Exception as e:
-            print(f"Failed to save action_items.json: {e}")
+            print(f"[ERROR] Failed to save action_items.json: {e}")
         convert_action_items(output_data)
         return jsonify({
             "message": "Action items processed and converted successfully",
             "items": output_data
         }), 200
     except Exception as e:
+        print(f"[ERROR] Extract action items error: {str(e)}")
         return jsonify({"error": f"Error processing transcript: {str(e)}"}), 500
 
 @app.route('/transcribe-and-extract', methods=['POST'])
@@ -274,6 +280,7 @@ def transcribe_and_extract():
         return extract_action_items()
     
     except Exception as e:
+        print(f"[ERROR] Transcribe and extract error: {str(e)}")
         return jsonify({"error": f"Error in combined processing: {str(e)}"}), 500
     
 @app.route('/get-json-files', methods=['GET'])
@@ -307,6 +314,7 @@ def get_json_files():
                 json_files['calendar_events'] = json.load(f)
         return jsonify(json_files), 200
     except Exception as e:
+        print(f"[ERROR] Get JSON files error: {str(e)}")
         return jsonify({'error': f'Error reading JSON files: {str(e)}'}), 500
     
 @app.route('/update-json-file', methods=['POST'])
@@ -339,8 +347,10 @@ def update_json_file():
         items[index] = updated_item
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(items, f, indent=2)
+        print(f"[INFO] Updated item in {file_path} at index {index}")
         return jsonify({'message': 'Item updated successfully'}), 200
     except Exception as e:
+        print(f"[ERROR] Update JSON file error: {str(e)}")
         return jsonify({'error': f'Error updating JSON file: {str(e)}'}), 500
 
 @app.route('/reject-action-item', methods=['POST'])
@@ -372,8 +382,10 @@ def reject_action_item():
         items.pop(index)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(items, f, indent=2)
+        print(f"[INFO] Rejected item in {file_path} at index {index}")
         return jsonify({'message': 'Item rejected and removed successfully'}), 200
     except Exception as e:
+        print(f"[ERROR] Reject action item error: {str(e)}")
         return jsonify({'error': f'Error rejecting action item: {str(e)}'}), 500
 
 @app.route('/accept-action-item', methods=['POST'])
@@ -394,12 +406,32 @@ def accept_action_item():
         if not backend_url:
             return jsonify({'error': f'No backend URL configured for {file_type}'}), 500
         
-        # Get token either from session or localStorage
+        # Debug session data
+        print(f"[DEBUG] Session data: {dict(session)}")
         token = session.get('token')
-        if not token:
-            return jsonify({'error': 'Authentication token not found'}), 401
-            
+        from_email = session.get('user_email')
+        print(f"[DEBUG] Token: {token}")
+        print(f"[DEBUG] From Email: {from_email}")
+        
+        if not token or (backend_type == 'email' and not from_email):
+            print(f"[ERROR] Missing token or sender email (token: {token}, from_email: {from_email})")
+            return jsonify({
+                'error': 'Authentication required. Please log in again.',
+                'redirect': url_for('login')
+            }), 401
+
+        # Add from_email to email item and validate
+        if backend_type == 'email':
+            item['from_email'] = from_email
+            required_fields = ['from_email', 'recipient', 'subject', 'body']
+            missing_fields = [field for field in required_fields if not item.get(field)]
+            if missing_fields:
+                print(f"[ERROR] Missing required email fields: {missing_fields}")
+                return jsonify({'error': f'Missing required email fields: {", ".join(missing_fields)}'}), 400
+            print(f"[DEBUG] Email item after adding from_email: {item}")
+
         headers = {'Content-Type': 'application/json', 'auth-token': token}
+        print(f"[DEBUG] Sending request to {backend_url} with headers {headers} and body {item}")
         response = requests.post(backend_url, json=item, headers=headers)
         
         if response.status_code == 200:
@@ -421,22 +453,40 @@ def accept_action_item():
                             json.dump(items, f, indent=2)
                 except Exception as e:
                     print(f"[ERROR] Failed to delete item from {file_path}: {str(e)}")
+            print(f"[INFO] Item accepted successfully for file_type: {file_type}, index: {index}")
             return jsonify({'message': 'Item accepted and removed successfully'}), 200
         else:
             error_msg = response.text or 'Unknown error'
+            print(f"[ERROR] Backend response: {error_msg} (status: {response.status_code})")
+            if response.status_code == 500 and '5.7.8' in error_msg:
+                return jsonify({
+                    'error': 'Failed to send email: Invalid SMTP credentials for the sender email. Please verify your email settings.',
+                    'redirect': url_for('login')
+                }), 500
             return jsonify({'error': f'Failed to accept item: {error_msg}'}), response.status_code
     except Exception as e:
+        print(f"[ERROR] Exception in accept-action-item: {str(e)}")
         return jsonify({'error': f'Error accepting action item: {str(e)}'}), 500
+
+@app.route('/debug-session', methods=['GET'])
+def debug_session():
+    print(f"[DEBUG] Accessing debug-session endpoint")
+    return jsonify({
+        "session": dict(session),
+        "user_email": session.get('user_email'),
+        "token": session.get('token')
+    })
 
 @app.route('/home')
 def home():
     if 'token' not in session:
+        print(f"[INFO] No token in session, redirecting to login")
         return redirect(url_for('login'))
     
-    app_url = os.getenv('APP_URL', os.getenv('APP_URL'))
-    return render_template('index.html', app_url= app_url)
+    app_url = os.getenv('APP_URL', 'http://localhost:5000')
+    print(f"[INFO] Rendering home page with app_url: {app_url}")
+    return render_template('index.html', app_url=app_url, token=session.get('token'))
 
-# Login route
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -444,16 +494,30 @@ def login():
             "email": request.form['email'],
             "password": request.form['password']
         }
+        print(f"[DEBUG] Login attempt with email: {payload['email']}")
         res = requests.post(f"{BASE_URL}/api/auth/login", json=payload)
         if res.status_code == 200:
             token = res.json().get("authToken")
             session['token'] = token
-            #flash("Login successful!", "success")
-            # Pass token to template for localStorage storage
-            return render_template('index.html', token=token)
-        flash("Login failed!", "danger")
+            session['user_email'] = payload['email']
+            print(f"[INFO] Login successful, set session: token={token}, user_email={payload['email']}")
+            return redirect(url_for('home'))
+        else:
+            print(f"[ERROR] Login failed: {res.text}")
+            flash("Login failed!", "danger")
+    print(f"[INFO] Rendering login page")
     return render_template('login.html')
 
+@app.route('/logout', methods=['POST'])
+def logout():
+    print(f"[INFO] Logging out, clearing session")
+    session.clear()
+    return jsonify({'message': 'Logged out successfully'}), 200
+
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 5000))  
+    port = int(os.getenv("PORT", 5000))
+    print(f"[INFO] Starting Flask app on port {port}")
+    if not os.getenv('BACKEND_1_SERVICE'):
+        print("[ERROR] BACKEND_1_SERVICE environment variable not set")
+    print(f"[INFO] BACKEND_URLS: {BACKEND_URLS}")
     app.run(debug=False, host='0.0.0.0', port=port)
