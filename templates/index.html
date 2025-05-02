@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Audio Recorder</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ System Audio Recorder</h1>
+        <div class="buttons">
+            <button onclick="startRecording()">Start Recording</button>
+            <button onclick="stopRecording()">Stop Recording</button>
+            <button onclick="transcribeAudio()">Transcribe</button>
+        </div>
+        <div id="status"></div>
+        <h3>Transcription:</h3>
+        <pre id="transcription"></pre>
+    </div>
+
+    <script>
+        function startRecording() {
+            fetch('/start').then(res => res.text()).then(msg => {
+                document.getElementById('status').innerText = msg;
+            });
+        }
+
+        function stopRecording() {
+            fetch('/stop').then(res => res.text()).then(msg => {
+                document.getElementById('status').innerText = msg;
+            });
+        }
+
+        function transcribeAudio() {
+            fetch('/transcribe')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.transcription) {
+                        document.getElementById('transcription').innerText = data.transcription;
+                    } else {
+                        document.getElementById('transcription').innerText = "Error: " + data.error;
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
