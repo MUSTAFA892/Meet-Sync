@@ -74,6 +74,4 @@ def transcribe_audio():
     return jsonify({"transcription": result.text})
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 5000))
-    print(f"[INFO] Starting Flask app on port {port}")
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=False,port=5000)
