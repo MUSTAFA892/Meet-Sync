@@ -499,7 +499,7 @@ def login():
                 session.modified = True
             
             # Initiate Google OAuth 2.0 flow
-            redirect_uri = url_for('oauth2callback', _external=True, _scheme='https')
+            redirect_uri = url_for('oauth2callback', _external=True)
             client_config = {
                 "web": {
                     "client_id": os.getenv('GOOGLE_CLIENT_ID'),
