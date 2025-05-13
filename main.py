@@ -605,6 +605,7 @@ def oauth2callback():
         # Fallback to Userinfo API if id_token is missing or decoding fails
         if not user_email:
             headers = {'Authorization': f'Bearer {credentials.access_token}'}
+            print(headers)
             response = requests.get('https://www.googleapis.com/oauth2/v3/userinfo', headers=headers)
             if response.status_code == 200:
                 user_info = response.json()
