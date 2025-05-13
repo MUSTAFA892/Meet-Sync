@@ -17,6 +17,7 @@ from google.auth.transport.requests import Request
 from urllib.parse import parse_qs, urlparse
 import uuid
 import jwt
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,8 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 BASE_URL = os.getenv('BASE_URL')
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 CORS(app, resources={
     r"/*": {
@@ -515,6 +518,7 @@ def login():
             
             # Initiate Google OAuth 2.0 flow
             redirect_uri = url_for('oauth2callback', _external=True, _scheme='https')
+            print(redirect_uri)
             client_config = {
                 "web": {
                     "client_id": os.getenv('GOOGLE_CLIENT_ID'),
